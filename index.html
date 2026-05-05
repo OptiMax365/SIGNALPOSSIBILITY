@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PossibilityData — P2P File Transfer</title>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --primary: #6C63FF;
+            --primary-dark: #5A52D5;
+            --bg: #0f0f1a;
+            --card: #1a1a2e;
+            --card-hover: #22223a;
+            --text: #e0e0e0;
+            --text-muted: #8888aa;
+            --success: #00c896;
+            --danger: #ff6b6b;
+            --border: #2a2a4a;
+            --radius: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 40%, rgba(108, 99, 255, 0.06) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 60%, rgba(0, 200, 150, 0.04) 0%, transparent 50%);
+            animation: bgFloat 20s ease-in-out infinite;
+            z-index: -1;
+        }
+
+        @keyframes bgFloat {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-2%, -2%) rotate(1deg); }
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 40px 0 30px;
+        }
+
+        .logo {
+            font-size: 48px;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--success));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            margin-top: 6px;
+            font-size: 14px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px;
+            margin-bottom: 20px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title .icon {
+            font-size: 22px;
+        }
+
+        /* Connection Section */
+        .connection-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 16px;
+            align-items: end;
+        }
+
+        @media (max-width: 500px) {
+            .connection-grid {
+                grid-template-columns: 1fr;
+            }
+            .connection-grid .divider {
+                display: none;
+            }
+        }
+
+        .divider {
+            color: var(--text-muted);
+            font-size: 24px;
+            font-weight: 300;
+            padding-bottom: 10px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 4px 20px rgba(108, 99, 255, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0) scale(0.97);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--success), #00a67d);
+            color: white;
+        }
+
+        .btn-success:hover {
+            box-shadow: 0 4px 20px rgba(0, 200, 150, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger), #e05555);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* Room Code Display */
+        .room-display {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .room-code {
+            flex: 1;
+            background: var(--bg);
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: var(--primary);
+            user-select: all;
+            word-break: break-all;
+        }
+
+        .copy-btn {
+            padding: 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .copy-btn:hover {
+            background: var(--card-hover);
+            border-color: var(--primary);
+        }
+
+        .copy-btn.copied {
+            color: var(--success);
+            border-color: var(--success);
+        }
+
+        /* Input */
+        .input-group label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--bg);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+            transition: border-color 0.2s;
+            text-align: center;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .input-field::placeholder {
+            letter-spacing: 0;
+            font-family: 'Segoe UI', sans-serif;
+            color: var(--text-muted);
+        }
+
+        /* Status */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .status-bar.disconnected {
+            background: rgba(255, 107, 107, 0.1);
+            border: 1px solid rgba(255, 107, 107, 0.2);
+            color: var(--danger);
+        }
+
+        .status-bar.connecting {
+            background: rgba(108, 99, 255, 0.1);
+            border: 1px solid rgba(108, 99, 255, 0.2);
+            color: var(--primary);
+        }
+
+        .status-bar.connected {
+            background: rgba(0, 200, 150, 0.1);
+            border: 1px solid rgba(0, 200, 150, 0.2);
+            color: var(--success);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .status-bar.connecting .status-dot {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Drop Zone */
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 50px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(108, 99, 255, 0.05);
+        }
+
+        .drop-zone.dragover {
+            transform: scale(1.01);
+        }
+
+        .drop-zone .drop-icon {
+            font-size: 52px;
+            margin-bottom: 12px;
+        }
+
+        .drop-zone .drop-text {
+            font-size: 16px;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+
+        .drop-zone .drop-subtext {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .drop-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .drop-zone.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        /* File List */
+        .file-list {
+            margin-top: 20px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .file-icon {
+            font-size: 32px;
+            flex-shrink: 0;
+        }
+
+        .file-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .file-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .file-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-btn.download {
+            background: var(--primary);
+            color: white;
+        }
+
+        .file-btn.download:hover {
+            background: var(--primary-dark);
+        }
+
+        .file-btn.remove {
+            background: rgba(255, 107, 107, 0.15);
+            color: var(--danger);
+        }
+
+        .file-btn.remove:hover {
+            background: rgba(255, 107, 107, 0.25);
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+            border-radius: 2px;
+            transition: width 0.3s;
+            width: 0%;
+        }
+
+        .progress-fill.complete {
+            background: var(--success);
+        }
+
+        /* Peer list */
+        .peer-list {
+            margin-top: 16px;
+        }
+
+        .peer-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: var(--bg);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .peer-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--success));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+
+        .peer-name {
+            flex: 1;
+        }
+
+        .peer-status {
+            font-size: 12px;
+            color: var(--success);
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            padding: 14px 22px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 14px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            animation: toastIn 0.3s ease, toastOut 0.3s ease 3s forwards;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(40px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(40px); }
+        }
+
+        /* Hidden sections */
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 500px) {
+            .container {
+                padding: 12px;
+            }
+
+            header {
+                padding: 24px 0 20px;
+            }
+
+            .logo {
+                font-size: 36px;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .room-code {
+                font-size: 16px;
+                padding: 12px;
+            }
+
+            .drop-zone {
+                padding: 30px 16px;
+            }
+
+            .drop-zone .drop-icon {
+                font-size: 40px;
+            }
+
+            .toast-container {
+                left: 12px;
+                right: 12px;
+                bottom: 12px;
+            }
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(108, 99, 255, 0.15);
+            color: var(--primary);
+        }
+
+        .how-it-works {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .step {
+            text-align: center;
+            padding: 16px 10px;
+            background: var(--bg);
+            border-radius: 12px;
+        }
+
+        .step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .step p {
+            font-size: 12px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        @media (max-width: 400px) {
+            .how-it-works {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">📡</div>
+            <h1>PossibilityData</h1>
+            <p class="subtitle">Peer-to-peer file transfer — no uploads, no cloud</p>
+        </header>
+
+        <!-- Setup Screen -->
+        <div id="setupScreen" class="section active">
+            <div class="card">
+                <div class="card-title">
+                    <span class="icon">🚀</span> Get Started
+                </div>
+                <div class="connection-grid">
+                    <div>
+                        <button class="btn btn-primary" id="createRoomBtn" onclick="createRoom()">
+                            ✨ Create Room
+                        </button>
+                        <p style="font-size:12px; color:var(--text-muted); margin-top:8px; text-align:center;">
+                            You'll get a code to share
+                        </p>
+                    </div>
+                    <div class="divider">or</div>
+                    <div>
+                        <div class="input-group">
+                            <label>Enter Room Code</label>
+                            <input type="text" class="input-field" id="joinCodeInput" placeholder="e.g. ABC123" maxlength="20">
+                        </div>
+                        <button class="btn btn-success" style="margin-top:12px;" id="joinRoomBtn" onclick="joinRoom()">
+                            🔗 Join Room
+                        </button>
+                    </div>
+                </div>
+
+                <div class="how-it-works">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <p>Create a room on one device</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <p>Share the code with other devices</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">3</div>
+                        <p>Send files directly, no server</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Room Screen -->
+        <div id="roomScreen" class="section">
+            <div id="statusBar" class="status-bar disconnected">
+                <div class="status-dot"></div>
+                <span id="statusText">Disconnected</span>
+            </div>
+
+            <!-- Room Code -->
+            <div id="hostSection" class="card" style="display:none;">
+                <div class="card-title">
+                    <span class="icon">🎫</span> Your Room Code
+                </div>
+                <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+                    Share this code with other devices to connect
+                </p>
+                <div class="room-display">
+                    <div class="room-code" id="roomCodeDisplay">------</div>
+                    <button class="copy-btn" id="copyBtn" onclick="copyRoomCode()" title="Copy">📋</button>
+                </div>
+            </div>
+
+            <!-- Connected Peers -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="icon">👥</span> Connected Devices
+                    <span class="badge" id="peerCount">0</span>
+                </div>
+                <div class="peer-list" id="peerList">
+                    <div class="empty-state">No devices connected yet</div>
+                </div>
+            </div>
+
+            <!-- Send Files -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="icon">📤</span> Send Files
+                </div>
+                <div class="drop-zone disabled" id="dropZone">
+                    <input type="file" id="fileInput" multiple>
+                    <div class="drop-icon">📁</div>
+                    <div class="drop-text">Drop files here or tap to browse</div>
+                    <div class="drop-subtext">Any file type • No size limit (P2P)</div>
+                </div>
+            </div>
+
+            <!-- Sent / Received Files -->
+            <div class="card">
+                <div class="card-title">
+                    <span class="icon">📦</span> Files
+                </div>
+                <div class="file-list" id="fileList">
+                    <div class="empty-state">No files transferred yet</div>
+                </div>
+            </div>
+
+            <button class="btn btn-danger" style="margin-top:10px; margin-bottom:30px;" onclick="leaveRoom()">
+                🚪 Leave Room
+            </button>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // ==================== STATE ====================
+        let peer = null;
+        let connections = {};  // peerId -> DataConnection
+        let isHost = false;
+        let myPeerId = null;
+        let receivedFiles = [];
+        let peerCounter = 0;
+
+        const setupScreen = document.getElementById('setupScreen');
+        const roomScreen = document.getElementById('roomScreen');
+        const hostSection = document.getElementById('hostSection');
+        const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+        const peerList = document.getElementById('peerList');
+        const peerCountBadge = document.getElementById('peerCount');
+        const fileList = document.getElementById('fileList');
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const statusBar = document.getElementById('statusBar');
+        const statusText = document.getElementById('statusText');
+
+        // ==================== PEER SETUP ====================
+        function generateId() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let result = '';
+            for (let i = 0; i < 8; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        }
+
+        function setStatus(type, text) {
+            statusBar.className = `status-bar ${type}`;
+            statusText.textContent = text;
+        }
+
+        function showScreen(screen) {
+            setupScreen.classList.remove('active');
+            roomScreen.classList.remove('active');
+            screen.classList.add('active');
+        }
+
+        // ==================== CREATE ROOM (HOST) ====================
+        function createRoom() {
+            const btn = document.getElementById('createRoomBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Creating...';
+
+            const roomId = generateId();
+
+            peer = new Peer(roomId, {
+                debug: 1,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                myPeerId = id;
+                isHost = true;
+                showScreen(roomScreen);
+                hostSection.style.display = 'block';
+                roomCodeDisplay.textContent = id;
+                setStatus('connecting', 'Room created — waiting for peers...');
+                enableDropZone();
+                showToast('✅ Room created! Code: ' + id);
+            });
+
+            peer.on('connection', (conn) => {
+                handleConnection(conn);
+            });
+
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                if (err.type === 'unavailable-id') {
+                    showToast('❌ Code taken, trying another...');
+                    peer.destroy();
+                    peer = null;
+                    btn.disabled = false;
+                    btn.innerHTML = '✨ Create Room';
+                    createRoom();
+                    return;
+                }
+                showToast('❌ Error: ' + err.type);
+                btn.disabled = false;
+                btn.innerHTML = '✨ Create Room';
+            });
+
+            peer.on('disconnected', () => {
+                setStatus('disconnected', 'Disconnected from signaling server');
+                showToast('⚠️ Disconnected — reconnecting...');
+                setTimeout(() => {
+                    if (peer && !peer.destroyed) {
+                        peer.reconnect();
+                    }
+                }, 2000);
+            });
+        }
+
+        // ==================== JOIN ROOM (GUEST) ====================
+        function joinRoom() {
+            const code = document.getElementById('joinCodeInput').value.trim().toUpperCase();
+            if (!code) {
+                showToast('⚠️ Please enter a room code');
+                return;
+            }
+
+            const btn = document.getElementById('joinRoomBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Joining...';
+
+            peer = new Peer(null, {
+                debug: 1,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                }
+            });
+
+            peer.on('open', (id) => {
+                myPeerId = id;
+                isHost = false;
+                showScreen(roomScreen);
+                hostSection.style.display = 'none';
+
+                const conn = peer.connect(code, {
+                    reliable: true,
+                    metadata: { name: getDeviceName() }
+                });
+
+                handleConnection(conn);
+            });
+
+            peer.on('error', (err) => {
+                console.error('Peer error:', err);
+                if (err.type === 'peer-unavailable') {
+                    showToast('❌ Room not found. Check the code.');
+                } else {
+                    showToast('❌ Error: ' + err.type);
+                }
+                btn.disabled = false;
+                btn.innerHTML = '🔗 Join Room';
+            });
+
+            peer.on('disconnected', () => {
+                setStatus('disconnected', 'Disconnected');
+                setTimeout(() => {
+                    if (peer && !peer.destroyed) peer.reconnect();
+                }, 2000);
+            });
+        }
+
+        // ==================== CONNECTION HANDLER ====================
+        function handleConnection(conn) {
+            const peerId = conn.peer;
+
+            setStatus('connecting', 'Connecting to peer...');
+
+            conn.on('open', () => {
+                connections[peerId] = conn;
+                peerCounter++;
+                updatePeerList();
+                updateStatus();
+                enableDropZone();
+                showToast('🎉 Device connected!');
+
+                // Announce existing files to new peer
+                announceExistingFiles(conn);
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'file') {
+                    receiveFile(data, peerId);
+                } else if (data.type === 'file-announce') {
+                    addReceivedFile(data.fileInfo, null, true);
+                } else if (data.type === 'chat') {
+                    showToast('💬 ' + data.message);
+                }
+            });
+
+            conn.on('close', () => {
+                delete connections[peerId];
+                updatePeerList();
+                updateStatus();
+                showToast('👋 A device disconnected');
+                if (Object.keys(connections).length === 0) {
+                    disableDropZone();
+                }
+            });
+
+            conn.on('error', (err) => {
+                console.error('Connection error:', err);
+                delete connections[peerId];
+                updatePeerList();
+                updateStatus();
+            });
+        }
+
+        // ==================== FILE TRANSFER ====================
+        const CHUNK_SIZE = 16384; // 16KB chunks
+
+        function sendFile(file) {
+            if (Object.keys(connections).length === 0) {
+                showToast('⚠️ No devices connected');
+                return;
+            }
+
+            const fileId = generateId();
+            const fileInfo = {
+                id: fileId,
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                lastModified: file.lastModified,
+                sender: myPeerId,
+                timestamp: Date.now()
+            };
+
+            // Add to UI
+            addSentFile(fileInfo);
+
+            // Send to all connections
+            const reader = new FileReader();
+            let offset = 0;
+
+            function sendChunk() {
+                const chunk = file.slice(offset, offset + CHUNK_SIZE);
+                reader.readAsArrayBuffer(chunk);
+            }
+
+            reader.onload = (e) => {
+                const data = {
+                    type: 'file',
+                    fileId: fileId,
+                    fileName: file.name,
+                    fileType: file.type,
+                    fileSize: file.size,
+                    fileTotalSize: file.size,
+                    chunk: e.target.result,
+                    offset: offset,
+                    lastChunk: offset + CHUNK_SIZE >= file.size,
+                    sender: myPeerId
+                };
+
+                // Broadcast to all peers
+                for (const peerId in connections) {
+                    try {
+                        connections[peerId].send(data);
+                    } catch (err) {
+                        console.error('Send error to', peerId, err);
+                    }
+                }
+
+                offset += CHUNK_SIZE;
+                updateFileProgress(fileId, offset, file.size);
+
+                if (offset < file.size) {
+                    sendChunk();
+                } else {
+                    completeFileTransfer(fileId);
+                }
+            };
+
+            sendChunk();
+        }
+
+        function receiveFile(data, fromPeerId) {
+            const fileId = data.fileId;
+
+            if (!receivedFiles[fileId]) {
+                receivedFiles[fileId] = {
+                    chunks: [],
+                    received: 0,
+                    total: data.fileSize,
+                    name: data.fileName,
+                    type: data.fileType
+                };
+                addReceivedFile({
+                    id: fileId,
+                    name: data.fileName,
+                    size: data.fileSize,
+                    type: data.fileType,
+                    sender: fromPeerId,
+                    timestamp: Date.now()
+                }, fileId);
+            }
+
+            const rf = receivedFiles[fileId];
+            rf.chunks[data.offset] = data.chunk;
+            rf.received += data.chunk.byteLength || 0;
+
+            updateFileProgress(fileId, rf.received, rf.total);
+
+            if (data.lastChunk) {
+                completeReceive(fileId);
+            }
+        }
+
+        function completeReceive(fileId) {
+            const rf = receivedFiles[fileId];
+            if (!rf) return;
+
+            // Reassemble blob
+            const blob = new Blob(Object.values(rf.chunks), { type: rf.type });
+            const url = URL.createObjectURL(blob);
+
+            const fileEl = document.querySelector(`[data-file-id="${fileId}"]`);
+            if (fileEl) {
+                const progressFill = fileEl.querySelector('.progress-fill');
+                if (progressFill) {
+                    progressFill.style.width = '100%';
+                    progressFill.classList.add('complete');
+                }
+                const dlBtn = fileEl.querySelector('.file-btn.download');
+                if (dlBtn) {
+                    dlBtn.style.display = '';
+                    dlBtn.onclick = () => {
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = rf.name;
+                        a.click();
+                    };
+                }
+                const meta = fileEl.querySelector('.file-meta');
+                if (meta) meta.textContent = `${formatSize(rf.total)} • ✅ Received`;
+            }
+
+            showToast('✅ Received: ' + rf.name);
+            delete receivedFiles[fileId];
+        }
+
+        function completeFileTransfer(fileId) {
+            const fileEl = document.querySelector(`[data-file-id="${fileId}"]`);
+            if (fileEl) {
+                const progressFill = fileEl.querySelector('.progress-fill');
+                if (progressFill) {
+                    progressFill.style.width = '100%';
+                    progressFill.classList.add('complete');
+                }
+                const meta = fileEl.querySelector('.file-meta');
+                if (meta) meta.textContent = '✅ Sent to all devices';
+            }
+            showToast('✅ File sent successfully!');
+        }
+
+        function announceExistingFiles(conn) {
+            // Notify new peer about previously sent files
+            document.querySelectorAll('.file-item[data-direction="sent"]').forEach(el => {
+                const fileId = el.dataset.fileId;
+                const name = el.querySelector('.file-name').textContent;
+                const meta = el.querySelector('.file-meta').textContent;
+                const sizeMatch = meta.match(/([\d.]+\s*[KMGT]?B)/);
+                const size = sizeMatch ? sizeMatch[1] : '0 B';
+                conn.send({
+                    type: 'file-announce',
+                    fileInfo: { id: fileId, name, size: parseSize(size), type: 'application/octet-stream', sender: 'previous', timestamp: Date.now() }
+                });
+            });
+        }
+
+        // ==================== UI HELPERS ====================
+        function getFileIcon(type, name) {
+            if (!type && !name) return '📄';
+            const ext = name ? name.split('.').pop().toLowerCase() : '';
+            if (type.startsWith('image/')) return '🖼️';
+            if (type.startsWith('video/')) return '🎬';
+            if (type.startsWith('audio/')) return '🎵';
+            if (type.includes('pdf')) return '📕';
+            if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return '📦';
+            if (['doc', 'docx'].includes(ext)) return '📝';
+            if (['xls', 'xlsx'].includes(ext)) return '📊';
+            if (['ppt', 'pptx'].includes(ext)) return '📑';
+            if (['js', 'py', 'html', 'css', 'json', 'xml', 'ts'].includes(ext)) return '💻';
+            if (['apk', 'ipa', 'exe', 'dmg'].includes(ext)) return '⚙️';
+            return '📄';
+        }
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function parseSize(str) {
+            const match = str.match(/([\d.]+)\s*([KMGT]?B)/);
+            if (!match) return 0;
+            const val = parseFloat(match[1]);
+            const unit = match[2];
+            const multipliers = { 'B': 1, 'KB': 1024, 'MB': 1048576, 'GB': 1073741824 };
+            return val * (multipliers[unit] || 1);
+        }
+
+        function addSentFile(fileInfo) {
+            const emptyState = fileList.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            const div = document.createElement('div');
+            div.className = 'file-item';
+            div.dataset.fileId = fileInfo.id;
+            div.dataset.direction = 'sent';
+            div.innerHTML = `
+                <div class="file-icon">${getFileIcon(fileInfo.type, fileInfo.name)}</div>
+                <div class="file-info">
+                    <div class="file-name">${fileInfo.name}</div>
+                    <div class="file-meta">${formatSize(fileInfo.size)} • Sending...</div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+                </div>
+                <div class="file-actions">
+                    <button class="file-btn remove" onclick="removeFile(this)">✕</button>
+                </div>
+            `;
+            fileList.prepend(div);
+        }
+
+        function addReceivedFile(fileInfo, fileId, isAnnouncement = false) {
+            const emptyState = fileList.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            // Check if already exists
+            if (document.querySelector(`[data-file-id="${fileInfo.id}"]`)) return;
+
+            const div = document.createElement('div');
+            div.className = 'file-item';
+            div.dataset.fileId = fileId || fileInfo.id;
+            div.dataset.direction = 'received';
+
+            const progressHtml = !isAnnouncement ?
+                `<div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>` : '';
+
+            const downloadStyle = isAnnouncement ? 'display:none;' : 'display:none;';
+
+            div.innerHTML = `
+                <div class="file-icon">${getFileIcon(fileInfo.type, fileInfo.name)}</div>
+                <div class="file-info">
+                    <div class="file-name">${fileInfo.name}</div>
+                    <div class="file-meta">${formatSize(fileInfo.size)} • ${isAnnouncement ? '📋 Available' : 'Receiving...'}</div>
+                    ${progressHtml}
+                </div>
+                <div class="file-actions">
+                    <button class="file-btn download" style="${downloadStyle}">⬇ Download</button>
+                    <button class="file-btn remove" onclick="removeFile(this)">✕</button>
+                </div>
+            `;
+            fileList.prepend(div);
+        }
+
+        function updateFileProgress(fileId, received, total) {
+            const fileEl = document.querySelector(`[data-file-id="${fileId}"]`);
+            if (!fileEl) return;
+            const fill = fileEl.querySelector('.progress-fill');
+            if (fill) {
+                fill.style.width = Math.min(100, (received / total * 100)).toFixed(1) + '%';
+            }
+            const meta = fileEl.querySelector('.file-meta');
+            if (meta && !fill?.classList.contains('complete')) {
+                const pct = (received / total * 100).toFixed(0);
+                meta.textContent = `${formatSize(received)} / ${formatSize(total)} • ${pct}%`;
+            }
+        }
+
+        function removeFile(btn) {
+            const item = btn.closest('.file-item');
+            item.style.animation = 'toastOut 0.3s ease forwards';
+            setTimeout(() => item.remove(), 300);
+        }
+
+        function updatePeerList() {
+            const peers = Object.keys(connections);
+            peerCountBadge.textContent = peers.length;
+
+            if (peers.length === 0) {
+                peerList.innerHTML = '<div class="empty-state">No devices connected yet</div>';
+                return;
+            }
+
+            peerList.innerHTML = '';
+            peers.forEach((peerId, i) => {
+                const div = document.createElement('div');
+                div.className = 'peer-item';
+                div.innerHTML = `
+                    <div class="peer-avatar">📱</div>
+                    <div class="peer-name">Device ${i + 1}</div>
+                    <div class="peer-status">● Online</div>
+                `;
+                peerList.appendChild(div);
+            });
+        }
+
+        function updateStatus() {
+            const count = Object.keys(connections).length;
+            if (count === 0) {
+                setStatus('disconnected', 'No devices connected');
+            } else {
+                setStatus('connected', `${count} device${count > 1 ? 's' : ''} connected`);
+            }
+        }
+
+        function enableDropZone() {
+            dropZone.classList.remove('disabled');
+        }
+
+        function disableDropZone() {
+            dropZone.classList.add('disabled');
+        }
+
+        function getDeviceName() {
+            const ua = navigator.userAgent;
+            if (/Android/.test(ua)) return 'Android Device';
+            if (/iPhone|iPad/.test(ua)) return 'Apple Device';
+            if (/Windows/.test(ua)) return 'Windows PC';
+            if (/Mac/.test(ua)) return 'Mac';
+            if (/Linux/.test(ua)) return 'Linux';
+            return 'Device';
+        }
+
+        // ==================== EVENT LISTENERS ====================
+        fileInput.addEventListener('change', (e) => {
+            Array.from(e.target.files).forEach(file => sendFile(file));
+            fileInput.value = '';
+        });
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            Array.from(e.dataTransfer.files).forEach(file => sendFile(file));
+        });
+
+        // Enter key on join input
+        document.getElementById('joinCodeInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') joinRoom();
+        });
+
+        // ==================== UTILITIES ====================
+        function copyRoomCode() {
+            const code = roomCodeDisplay.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                const btn = document.getElementById('copyBtn');
+                btn.classList.add('copied');
+                btn.textContent = '✅';
+                setTimeout(() => {
+                    btn.classList.remove('copied');
+                    btn.textContent = '📋';
+                }, 2000);
+                showToast('📋 Code copied to clipboard!');
+            }).catch(() => {
+                // Fallback
+                const ta = document.createElement('textarea');
+                ta.value = code;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                showToast('📋 Code copied!');
+            });
+        }
+
+        function leaveRoom() {
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            connections = {};
+            receivedFiles = [];
+            isHost = false;
+            myPeerId = null;
+            peerCounter = 0;
+
+            showScreen(setupScreen);
+            document.getElementById('createRoomBtn').disabled = false;
+            document.getElementById('createRoomBtn').innerHTML = '✨ Create Room';
+            document.getElementById('joinRoomBtn').disabled = false;
+            document.getElementById('joinRoomBtn').innerHTML = '🔗 Join Room';
+            document.getElementById('joinCodeInput').value = '';
+            fileList.innerHTML = '<div class="empty-state">No files transferred yet</div>';
+            peerList.innerHTML = '<div class="empty-state">No devices connected yet</div>';
+            disableDropZone();
+            setStatus('disconnected', 'Disconnected');
+        }
+
+        function showToast(message) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+    </script>
+</body>
+</html>
